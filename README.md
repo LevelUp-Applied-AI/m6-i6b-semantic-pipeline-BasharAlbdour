@@ -16,12 +16,11 @@ Build an end-to-end NLP pipeline combining named entity recognition and embeddin
 ```bash
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
-DistilBERT runs on PyTorch; we install the CPU wheel explicitly so the download stays small. `requirements.txt` intentionally omits `torch`. The first run of DistilBERT will download ~250 MB of model weights — this is a one-time download.
+DistilBERT uses PyTorch. `torch` is listed in `requirements.txt` (version 2.4 or higher) and `pip install` will download the correct version for your computer automatically. The first time you run DistilBERT, ~250 MB of model files will be downloaded and cached (saved) on your computer. After the first time, the model loads from the cache on your computer.
 
 ## Data
 
@@ -36,8 +35,8 @@ Complete all six functions in `semantic_pipeline.py`:
 2. **`run_ner(texts)`** — Extract named entities using spaCy
 3. **`compute_embeddings(texts, tokenizer, model)`** — Compute DistilBERT embeddings for all texts
 4. **`semantic_search(query, corpus_embeddings, corpus_texts, top_k=5)`** — Find the most similar texts
-5. **`enrich_with_entities(search_results, entity_df)`** — Add NER entities to search results
-6. **`demonstrate_pipeline(corpus_df, entity_df, embeddings, queries)`** — Run the full pipeline on example queries
+5. **`enrich_with_entities(search_results, entity_df, corpus_texts)`** — Add NER entities to search results (uses `corpus_texts` to map result text → text_index)
+6. **`demonstrate_pipeline(corpus_df, entity_df, embeddings, queries, tokenizer, model)`** — Run the full pipeline on example queries (tokenizer/model loaded once in `__main__` and injected)
 
 ## Submission
 

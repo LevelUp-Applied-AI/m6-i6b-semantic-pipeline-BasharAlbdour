@@ -1,7 +1,7 @@
+torch>=2.4
 transformers
 scikit-learn
 spacy
 pandas
 numpy
-matplotlib
 pytest

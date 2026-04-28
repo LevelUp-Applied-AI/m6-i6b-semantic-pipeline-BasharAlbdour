@@ -77,46 +77,58 @@ def semantic_search(query, corpus_embeddings, corpus_texts, top_k=5):
     pass
 
 
-def enrich_with_entities(search_results, entity_df):
+def enrich_with_entities(search_results, entity_df, corpus_texts):
     """Enrich semantic search results with NER entities.
 
-    For each search result, find the extracted entities for that text
-    and attach them to the result.
+    For each search result, look up its position in corpus_texts to get the
+    text_index, then attach the matching entities from entity_df.
 
     Args:
         search_results: List of (text, score) tuples from semantic_search.
         entity_df: DataFrame from run_ner with columns:
                    'text_index', 'entity_text', 'entity_label'.
+        corpus_texts: List of strings — the original corpus passed to
+                      run_ner. Used to map a result text to its text_index.
 
     Returns:
         List of dictionaries, each with keys:
         'text', 'similarity', 'entities' (list of {'text': ..., 'label': ...}).
     """
-    # TODO: Match each search result text to its entities from the DataFrame,
-    #       build the enriched results list
+    # TODO: For each (text, score) in search_results, find the text's
+    #       position in corpus_texts (this is the text_index).
+    # TODO: Filter entity_df to rows where text_index matches, then build
+    #       a list of {'text': entity_text, 'label': entity_label} dicts.
+    # TODO: Return one dict per search result with keys text, similarity,
+    #       entities.
     pass
 
 
-def demonstrate_pipeline(corpus_df, entity_df, embeddings, queries):
+def demonstrate_pipeline(corpus_df, entity_df, embeddings, queries,
+                         tokenizer, model):
     """Run the full pipeline demonstration on example queries.
 
     For each query string:
-    1. Compute the query embedding
-    2. Perform semantic search
+    1. Compute the query embedding (using the injected tokenizer and model)
+    2. Perform semantic search against the corpus embeddings
     3. Enrich results with entities
-    4. Print the results
 
     Args:
         corpus_df: DataFrame from load_and_preprocess.
         entity_df: DataFrame from run_ner.
         embeddings: numpy array of shape (n, 768) from compute_embeddings.
         queries: List of query strings.
+        tokenizer: Hugging Face tokenizer (already loaded by the caller).
+        model: Hugging Face model in eval mode (already loaded by the caller).
 
     Returns:
         Dictionary mapping each query string to its enriched results list.
     """
-    # TODO: Load tokenizer/model, compute query embeddings, search,
-    #       enrich, and collect results
+    # TODO: For each query, compute the query embedding by calling
+    #       compute_embeddings([query], tokenizer, model)[0].
+    # TODO: Call semantic_search with the query embedding and the corpus.
+    # TODO: Call enrich_with_entities, passing corpus_df['text'].tolist()
+    #       as corpus_texts.
+    # TODO: Collect into a dict keyed by the query string and return it.
     pass
 
 
@@ -147,7 +159,9 @@ if __name__ == "__main__":
             queries = [line.strip() for line in f if line.strip()]
 
         if embs is not None and entities is not None:
-            results = demonstrate_pipeline(df, entities, embs, queries)
+            results = demonstrate_pipeline(
+                df, entities, embs, queries, tokenizer, model
+            )
             if results:
                 for q, enriched in results.items():
                     print(f"\nQuery: {q}")

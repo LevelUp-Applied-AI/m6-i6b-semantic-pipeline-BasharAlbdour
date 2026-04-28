@@ -61,6 +61,33 @@ def test_run_ner():
     assert entities["text_index"].max() < len(SAMPLE_TEXTS), (
         "text_index must be a valid position into SAMPLE_TEXTS"
     )
+    # The sample texts contain obvious named entities. A working spaCy NER
+    # pipeline must extract at least one of them with a recognizable label.
+    # This rejects pipelines that silently drop labels or return malformed
+    # entity strings.
+    entity_pairs = set(zip(
+        entities["entity_text"].astype(str).str.strip(),
+        entities["entity_label"].astype(str).str.strip(),
+    ))
+    expected_any = {
+        ("United Nations", "ORG"),
+        ("Paris", "GPE"),
+        ("Southeast Asia", "LOC"),
+        ("Europe", "LOC"),
+        ("the Amazon", "LOC"),
+        ("Amazon", "LOC"),
+        ("the Middle East", "LOC"),
+        ("Middle East", "LOC"),
+        ("North Africa", "LOC"),
+        ("the Pacific Islands", "LOC"),
+        ("Pacific Islands", "LOC"),
+        ("2020", "DATE"),
+    }
+    assert entity_pairs & expected_any, (
+        "run_ner did not extract any of the obvious named entities present in "
+        f"SAMPLE_TEXTS (e.g., United Nations/ORG, Paris/GPE, Southeast Asia/LOC). "
+        f"Got entity (text, label) pairs: {sorted(entity_pairs)}"
+    )
 
 
 # ── Embeddings ───────────────────────────────────────────────────────────
@@ -86,6 +113,25 @@ def test_compute_embeddings():
         f"Expected shape ({len(SAMPLE_TEXTS)}, 768), got {embs.shape}"
     )
     assert not np.allclose(embs, 0), "Embeddings should not be all zeros"
+    # Spec (docstring): mean-pool the last hidden state. Reject CLS-token output
+    # by comparing the first row against a reference mean-pool computed here.
+    enc = tokenizer(SAMPLE_TEXTS[0], return_tensors="pt", padding=True, truncation=True)
+    with torch.no_grad():
+        outputs = model(**enc)
+    last_hidden = outputs.last_hidden_state
+    mask = enc["attention_mask"].unsqueeze(-1).float()
+    expected_mean = (last_hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+    expected_mean = expected_mean.squeeze(0).numpy()
+    cls_only = last_hidden[:, 0, :].squeeze(0).numpy()
+    assert np.allclose(embs[0], expected_mean, atol=1e-4), (
+        "compute_embeddings[0] must equal the attention-mask-weighted mean of "
+        "last_hidden_state across the token dimension (spec: mean-pool). "
+        "Returning CLS-token output is not mean pooling."
+    )
+    assert not np.allclose(embs[0], cls_only, atol=1e-4), (
+        "compute_embeddings[0] equals the CLS-token vector — spec requires "
+        "mean pooling, not CLS-token extraction."
+    )
 
 
 # ── Semantic Search ──────────────────────────────────────────────────────

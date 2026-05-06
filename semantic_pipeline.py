@@ -22,7 +22,11 @@ def load_and_preprocess(filepath):
         preprocessing columns you add (e.g., cleaned text).
     """
     # TODO: Load the CSV, handle missing values, ensure text column is clean
-    pass
+    df = pd.read_csv(filepath)
+    df = df.dropna(subset=["text"])
+    df = df[df["text"].str.strip() != ""]
+    df = df[df["language"] == "en"].reset_index(drop=True)
+    return df
 
 
 def run_ner(texts):
@@ -37,7 +41,17 @@ def run_ner(texts):
     """
     # TODO: Load a spaCy model, process each text, extract entities,
     #       and collect into a DataFrame
-    pass
+    nlp= spacy.load("en_core_web_sm")
+    rows=[]
+    for i,text in enumerate(texts):
+        doc=nlp(text)
+        for ent in doc.ents:
+            rows.append({
+                "text_index":i,
+                "entity_text":ent.text,
+                "entity_label":ent.label_
+            })
+    return pd.DataFrame(rows,columns=["text_index","entity_text","entity_label"])
 
 
 def compute_embeddings(texts, tokenizer, model):
@@ -57,7 +71,22 @@ def compute_embeddings(texts, tokenizer, model):
     import torch
     # TODO: Iterate over texts, tokenize with padding/truncation,
     #       run model forward pass (with torch.no_grad()), mean-pool hidden states
-    pass
+    embeddings=[]
+    for text in texts:
+        inputs=tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512
+        )
+        with torch.no_grad():
+            outputs=model(**inputs)
+        last_hidden = outputs.last_hidden_state  
+        mask = inputs["attention_mask"].unsqueeze(-1).float()  
+        embedding = (last_hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+        embedding = embedding.squeeze(0).numpy() 
+        embeddings.append(embedding)
+    return np.array(embeddings)
 
 
 def semantic_search(query, corpus_embeddings, corpus_texts, top_k=5):
@@ -74,7 +103,10 @@ def semantic_search(query, corpus_embeddings, corpus_texts, top_k=5):
     """
     # TODO: Compute cosine similarity between query and all corpus embeddings,
     #       sort by similarity, return top-k results
-    pass
+    from sklearn.metrics.pairwise import cosine_similarity
+    scores=cosine_similarity(query.reshape(1,-1),corpus_embeddings)[0]
+    top_indices=np.argsort(scores)[::-1][:top_k]
+    return [(corpus_texts[i], float(scores[i])) for i in top_indices]
 
 
 def enrich_with_entities(search_results, entity_df, corpus_texts):
@@ -100,7 +132,20 @@ def enrich_with_entities(search_results, entity_df, corpus_texts):
     #       a list of {'text': entity_text, 'label': entity_label} dicts.
     # TODO: Return one dict per search result with keys text, similarity,
     #       entities.
-    pass
+    enriched = []
+    for text, score in search_results:
+        text_index = corpus_texts.index(text)
+        matching = entity_df[entity_df["text_index"] == text_index]
+        entities = [
+            {"text": row["entity_text"], "label": row["entity_label"]}
+            for _, row in matching.iterrows()
+        ]
+        enriched.append({
+            "text": text,
+            "similarity": score,
+            "entities": entities
+        })
+    return enriched
 
 
 def demonstrate_pipeline(corpus_df, entity_df, embeddings, queries,
@@ -129,7 +174,14 @@ def demonstrate_pipeline(corpus_df, entity_df, embeddings, queries,
     # TODO: Call enrich_with_entities, passing corpus_df['text'].tolist()
     #       as corpus_texts.
     # TODO: Collect into a dict keyed by the query string and return it.
-    pass
+    results = {}
+    corpus_texts = corpus_df["text"].tolist()
+    for query in queries:
+        query_emb = compute_embeddings([query], tokenizer, model)[0]
+        search_results = semantic_search(query_emb, embeddings, corpus_texts)
+        enriched = enrich_with_entities(search_results, entity_df, corpus_texts)
+        results[query] = enriched
+    return results
 
 
 if __name__ == "__main__":
@@ -165,7 +217,7 @@ if __name__ == "__main__":
             if results:
                 for q, enriched in results.items():
                     print(f"\nQuery: {q}")
-                    for r in enriched[:3]:
+                    for r in enriched:
                         print(f"  Score: {r['similarity']:.4f}")
                         print(f"  Text: {r['text'][:100]}...")
                         print(f"  Entities: {r['entities'][:5]}")
